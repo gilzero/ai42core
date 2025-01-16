@@ -56,7 +56,7 @@ function ai42core_generate_gemini_title(string $body_text): ?string {
   }
 
   $client = \Drupal::httpClient();
-  $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $api_key;
+  $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=' . $api_key;
 
   $prompt = "Summarize the following text into a short title:\n\n" . $body_text;
 
