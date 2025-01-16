@@ -1,0 +1,7 @@
+ai42core.hello:
+  path: '/hello-ai42'
+  defaults:
+    _controller: '\Drupal\ai42core\Controller\HelloController::content'
+    _title: 'Hello AI42'
+  requirements:
+    _permission: 'access content'

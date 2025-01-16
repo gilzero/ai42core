@@ -1,0 +1,14 @@
+name: AI42 Core
+type: module
+description: |
+  A custom module that provides two main features:<br>
+  1) It creates a custom route "/hello-ai42" that displays a "Hello World" message.<br>
+  2) It modifies Article and Page content types by automatically updating their titles to "Hello World @ [Current Time]" upon creation.<br><br>
+  This module demonstrates basic Drupal routing, controller implementation, and entity manipulation using hooks.
+package: Custom
+core_version_requirement: ^9 || ^10 || ^11
+version: 1.0.0
+dependencies:
+  - drupal:node
+  - drupal:config
+  - key:key

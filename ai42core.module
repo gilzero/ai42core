@@ -1,0 +1,123 @@
+<?php
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\node\Entity\Node;
+use Drupal\Component\Serialization\Json;
+use Drupal\key\Entity\Key;
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_entity_insert().
+ */
+function ai42core_entity_insert(EntityInterface $entity) {
+  if ($entity->getEntityTypeId() === 'node' && $entity->bundle() === 'article') {
+    // Get the body value
+    if ($entity->hasField('body') && !$entity->get('body')->isEmpty()) {
+      $body_value = $entity->get('body')->first()->getValue()['value'];
+
+      // Generate a title using Google Gemini
+      $new_title = ai42core_generate_gemini_title($body_value);
+
+      if ($new_title) {
+        // Update the node title
+        $entity->setTitle($new_title);
+        $entity->save();
+      } else {
+        \Drupal::logger('ai42core')->warning('Failed to generate title from Gemini for article node: @nid', ['@nid' => $entity->id()]);
+      }
+    }
+  }
+}
+
+/**
+ * Generates a title using Google Gemini API.
+ *
+ * @param string $body_text
+ *   The text to summarize into a title.
+ *
+ * @return string|null
+ *   The generated title or NULL on failure.
+ */
+function ai42core_generate_gemini_title(string $body_text): ?string {
+  // Get the Gemini API key from the Key module.
+  $key_id = 'gemini'; // Replace with the actual key ID you configured in the Key module
+  $key = Key::load($key_id);
+
+  if (!$key) {
+    \Drupal::logger('ai42core')->error('Gemini API key not found in Key module.');
+    return NULL;
+  }
+
+  $api_key = $key->getKeyValue();
+
+  if (empty($api_key)) {
+    \Drupal::logger('ai42core')->error('Gemini API key is empty.');
+    return NULL;
+  }
+
+  $client = \Drupal::httpClient();
+  $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $api_key;
+
+  $prompt = "Summarize the following text into a short title:\n\n" . $body_text;
+
+  $payload = [
+    'contents' => [
+      [
+        'parts' => [
+          [
+            'text' => $prompt,
+          ],
+        ],
+      ],
+    ],
+  ];
+
+  try {
+    $response = $client->request('POST', $url, [
+      'headers' => [
+        'Content-Type' => 'application/json',
+      ],
+      'body' => Json::encode($payload),
+      'http_errors' => true,
+    ]);
+
+    if ($response->getStatusCode() == 200) {
+      $data = Json::decode($response->getBody()->getContents());
+        if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+            return trim($data['candidates'][0]['content']['parts'][0]['text']);
+        } else {
+            \Drupal::logger('ai42core')->error('Gemini API response missing title text.');
+            return NULL;
+        }
+    } else {
+      \Drupal::logger('ai42core')->error('Gemini API request failed with status code: @code', ['@code' => $response->getStatusCode()]);
+      return NULL;
+    }
+  } catch (\Exception $e) {
+    \Drupal::logger('ai42core')->error('Gemini API request failed with exception: @message', ['@message' => $e->getMessage()]);
+    return NULL;
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function ai42core_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if ($form_id === 'node_article_form' || $form_id === 'node_article_edit_form') {
+    // Prefill the title field with "auto"
+    $form['title']['#default_value'] = 'auto';
+    // Hide the title field
+    $form['title']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function ai42core_entity_presave(EntityInterface $entity) {
+  if ($entity->getEntityTypeId() === 'node' && $entity->bundle() === 'article') {
+    if ($entity->getTitle() === NULL || $entity->getTitle() === '') {
+      $entity->setTitle('auto');
+    }
+  }
+}
